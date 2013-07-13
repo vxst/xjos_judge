@@ -583,7 +583,7 @@ void alertnodetoupdate(int dtid,int status,double mem,double time,int grade){
 }
 
 //----------------------------Something about TJDA Problem--------------------------
-int tjda_stid;
+int tjda_stid,tjda_sid,tjda_fullscore;
 int fetchtjdaprob(){
 	char order[512];
 	Query qout=conn.query();
@@ -592,7 +592,7 @@ int fetchtjdaprob(){
 	if(!qout.exec())
 		fprintf(stderr,"!!!SQLERROR!!!");
 
-	qout<<"SELECT problem.spjid,submit_tjda.stid,submit_tjda.output,submit_tjda.rank,problem_data.problem_data_input,problem_data.problem_data_output,problem_data.problem_data_score FROM `submit_tjda` JOIN `problem_data` ON problem_data.pid=submit_tjda.pid AND problem_data.problem_data_rank=submit_tjda.rank JOIN problem ON problem.pid=submit_tjda.pid WHERE `isjudged`=0 LIMIT 0,1";
+	qout<<"SELECT problem.spjid,submit_tjda.stid,submit_tjda.output,submit_tjda.rank,problem_data.problem_data_input,problem_data.problem_data_output,problem_data.problem_data_score,submit_tjda.sid FROM `submit_tjda` JOIN `problem_data` ON problem_data.pid=submit_tjda.pid AND problem_data.problem_data_rank=submit_tjda.rank JOIN problem ON problem.pid=submit_tjda.pid WHERE `isjudged`=0 LIMIT 0,1";
 
 	Row r=qout.use().fetch_row();
 	if(!r){
@@ -602,8 +602,10 @@ int fetchtjdaprob(){
 		return NOT_FOUND;
 	}
 	spjid=r["spjid"];
-	grade=r["problem_data_score"];
+	tjda_fullscore=grade=r["problem_data_score"];
 	tjda_stid=r["stid"];
+	tjda_sid=r["sid"];
+
 
 	fprintf(stderr,"Starting STID:%d\n",tjda_stid);
 	
@@ -637,9 +639,20 @@ tst_result tjdajudgeonce(const char* tester,const char* outname,const char* stdn
 	fscanf(fres,"%s%d",msg,&ret.points);
 	return ret;
 }
-void tjdaupdate(int stid,tst_result t){
+void tjdaupdate(int stid,int sid,tst_result t){
 	Query qout=conn.query();
-	qout<<"UPDATE submit_tjda SET grade="<<t.points<<" WHERE stid="<<stid;
+	char* status=(char*)calloc(64,sizeof(char));
+	int status_id=0;
+	if(t.points>=tjda_fullscore){
+		strcpy(status,"AC");
+		status_id=16;
+	}else{
+		strcpy(status,"WA");
+		status_id=32;
+	}
+	qout<<"UPDATE xjos.submit_tjda SET grade="<<t.points<<", status="<<quote<<status<<",status_id="<<status_id<<",message="<<quote<<t.message<<" WHERE stid="<<stid;
+	qout.exec();
+	qout<<"UPDATE xjos.submit SET grade=(SELECT SUM(grade) FROM xjos.submit_tjda WHERE sid="<<sid<<") WHERE sid="<<sid;
 	qout.exec();
 }
 
@@ -669,7 +682,7 @@ int main(){
 			}else{
 				t=tjdajudgeonce("tester","test.out","test.std","test.res",grade);
 			}
-			tjdaupdate(tjda_stid,t);
+			tjdaupdate(tjda_stid,tjda_sid,t);
 		}
 		return 0;
 	}
