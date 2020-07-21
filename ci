@@ -1,2 +1,0 @@
-test.cpp: In function 'int main()':
-test.cpp:146:23: warning: format '%d' expects argument of type 'int', but argument 2 has type 'long long int' [-Wformat]
